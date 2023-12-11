@@ -79,6 +79,7 @@ createUser: update(
   }
 ),
 
+// authenticate user
 authenticateUser: update(
   [text, text],
   Result(text, text),
@@ -96,6 +97,24 @@ authenticateUser: update(
     return Ok('Logged in');
   }
 ),
+
+// logout user
+logOut: update([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('no logged in user');
+  }
+  currentUser = undefined;
+  return Ok('Logged out successfully.');
+}),
+
+// get current user
+getCurrentUser : query([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('no logged in user.');
+  }
+  return Ok(currentUser.username);
+}),
+
 
 })
 
