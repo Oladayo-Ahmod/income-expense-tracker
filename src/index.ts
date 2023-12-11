@@ -9,7 +9,6 @@ const User = Record({
     id: Principal,
     username: text,
     password: text,
-    amount: float64,
 });
 
 // Expenses
@@ -77,6 +76,24 @@ createUser: update(
     };
     userStorage.insert(newUser.id, newUser);
     return Ok(`${newUser.username} added successfully.`);
+  }
+),
+
+authenticateUser: update(
+  [text, text],
+  Result(text, text),
+  (username, password) => {
+    const user : any = userStorage
+      .values()
+      .filter((c: typeof User) => c.username === username)[0];
+    if (!user) {
+      return Err('user does not exist.');
+    }
+    if (user.password !== password) {
+      return Err('incorrect password');
+    }
+    currentUser = user;
+    return Ok('Logged in');
   }
 ),
 
