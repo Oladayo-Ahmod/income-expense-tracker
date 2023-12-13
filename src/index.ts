@@ -230,6 +230,7 @@ getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
       return Ok(`${balance} deficit, your expenses are more than your incomes `)
     }
 
+  return Ok(balance >= 0 ? 'Surplus' : 'Deficit');
 }),
 
 
