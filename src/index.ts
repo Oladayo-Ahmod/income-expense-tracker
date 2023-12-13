@@ -167,6 +167,72 @@ addIncome: update(
   }
 ),
 
+// retrieve current user incomes
+getCurrentUserIncome: query([], Result(Vec(Income), text), () => {
+  if (!currentUser) {
+    return Err('unathenticated');
+  }
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) =>
+      income.userId === currentUser?.id
+  );
+  return Ok(currentUserIncomes);
+}),
+
+// retrieve current user expenses
+getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
+  if (!currentUser) {
+    return Err('unathenticated');
+  }
+  const expenses = expenseStorage.values();
+  const currentUserexpenses = expenses.filter(
+    (expense: typeof Expenses) =>
+      expense.userId === currentUser?.id
+  );
+  return Ok(currentUserexpenses);
+}),
+
+ // retrieve current user balance
+ getCurrentUserBalance: query([], Result(float64, text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => income.userId === currentUser?.id
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => expense.userId === currentUser?.id
+  );
+
+  const totalIncome = currentUserIncomes.reduce(
+    (sum : any, income : any) => sum + income.amount,
+    0
+  );
+
+  const totalExpenses = currentUserExpenses.reduce(
+    (sum :any, expense :any) => sum + expense.amount,
+    0
+  );
+
+  const balance = totalIncome - totalExpenses;
+    if (balance > 0) {
+      return Ok(`${balance} surplus , your incomes are more than your expenses`)
+    }
+    else if (balance == 0) {
+      return Ok(`${balance} balanced, your expenses equal your incomes`)
+    }
+    else if (balance < 0) {
+      return Ok(`${balance} deficit, your expenses are more than your incomes `)
+    }
+
+}),
+
+
 
 })
 
