@@ -18,8 +18,8 @@ const Expenses = Record({
     userId : Principal,
     amount : float64,
     description : text,
-    type : text,
-    location : text // where the expenses take place
+    location : text, // where the expenses take place
+    timestamp : nat64
 });
 
 // income
@@ -29,8 +29,8 @@ const Income = Record({
     userId : Principal,
     amount : float64,
     description : text,
-    type : text,
-    location : text // where the income take place
+    location : text, // where the income take place
+    timestamp : nat64
 });
 
 // tracker
@@ -58,9 +58,9 @@ const expenseStorage = StableBTreeMap(Principal,Expenses,3) // expense storage
 export default Canister({
 // create new user
 createUser: update(
-  [text, text, float64],
+  [text, text],
   Result(text, text),
-  (username :any, password : string, amount :number) => {
+  (username :any, password : string) => {
 
     const user = userStorage
       .values()
@@ -71,8 +71,7 @@ createUser: update(
     const newUser: typeof User = {
       id: idGenerator(),
       username,
-      password,
-      amount,
+      password
     };
     userStorage.insert(newUser.id, newUser);
     return Ok(`${newUser.username} added successfully.`);
@@ -117,9 +116,9 @@ getCurrentUser : query([], Result(text, text), () => {
 
 // add expense
 addExpense: update(
-  [text,float64,text,text,text],
+  [text,float64,text,text],
   Result(text, text),
-  (name,amount,description,type,location) => {
+  (name,amount,description,location) => {
     if (!currentUser) {
       return Err('unathenticated');
     }
@@ -130,16 +129,287 @@ addExpense: update(
       userId : currentUser.id,
       amount,
       description,
-      type,
-      location
+      location,
       timestamp: ic.time(),
     };
     expenseStorage.insert(newExpense.id, newExpense);
-    customerStorage.insert(currentCustomer.id, { ...currentCustomer });
+    // userStorage.insert(currentUser.id, { ...currentUser });
     return Ok('Expenses added successfully.');
   }
 ),
 
+// add income
+addIncome: update(
+  [text,float64,text,text],
+  Result(text, text),
+  (name,amount,description,location) => {
+    if (!currentUser) {
+      return Err('unathenticated');
+    }
+
+    const newIncome: typeof Income = {
+      id: idGenerator(),
+      name,
+      userId : currentUser.id,
+      amount,
+      description,
+      location,
+      timestamp: ic.time(),
+    };
+    incomeStorage.insert(newIncome.id, newIncome);
+    // userStorage.insert(currentUser.id, { ...currentUser });
+    return Ok('Income added successfully.');
+  }
+),
+
+// retrieve current user incomes
+getCurrentUserIncome: query([], Result(Vec(Income), text), () => {
+  if (!currentUser) {
+    return Err('unathenticated');
+  }
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) =>
+      income.userId === currentUser?.id
+  );
+  return Ok(currentUserIncomes);
+}),
+
+// retrieve current user expenses
+getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
+  if (!currentUser) {
+    return Err('unathenticated');
+  }
+  const expenses = expenseStorage.values();
+  const currentUserexpenses = expenses.filter(
+    (expense: typeof Expenses) =>
+      expense.userId === currentUser?.id
+  );
+  return Ok(currentUserexpenses);
+}),
+
+ // retrieve current user balance
+ getCurrentUserBalance: query([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => income.userId === currentUser?.id
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => expense.userId === currentUser?.id
+  );
+
+  const totalIncome = currentUserIncomes.reduce(
+    (sum : any, income : any) => sum + income.amount,
+    0
+  );
+
+  const totalExpenses = currentUserExpenses.reduce(
+    (sum :any, expense :any) => sum + expense.amount,
+    0
+  );
+
+  const balance = totalIncome - totalExpenses;
+
+  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
+}),
+
+// retrieve current user expenses for the current month
+getCurrentUserExpensesForCurrentMonth: query([], Result(Vec(Expenses), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
+      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
+    }
+  );
+
+  return Ok(currentUserExpenses);
+}),
+
+// retrieve current user income for the current month
+getCurrentUserIncomeForCurrentMonth: query([], Result(Vec(Income), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const incomes = incomeStorage.values();
+  const currentUserIncome = incomes.filter(
+    (income: typeof Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser?.id && incomeMonth === currentMonth;
+    }
+  );
+
+  return Ok(currentUserIncome);
+}),
+
+// retrieve current user income and expenses for the year
+getCurrentUserTransactionsForCurrentYear: query([], Result(Vec(Record({income: Income, expense: Expenses})), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => {
+      const incomeYear = new Date(Number(income.timestamp)).getFullYear();
+      return income.userId === currentUser?.id && incomeYear === currentYear;
+    }
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
+      return expense.userId === currentUser?.id && expenseYear === currentYear;
+    }
+  );
+
+  const transactions = currentUserIncomes.map(income => ({ income })) 
+    .concat(currentUserExpenses.map(expense => ({ expense })));
+  return Ok(transactions);
+}),
+
+
+// retrieve current user balance for current month
+getCurrentUserBalanceForCurrentMonth: query([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser?.id && incomeMonth === currentMonth;
+    }
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
+      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
+    }
+  );
+
+  const totalIncome = currentUserIncomes.reduce(
+    (sum :any, income :any) => sum + income.amount,
+    0
+  );
+
+  const totalExpenses = currentUserExpenses.reduce(
+    (sum :any, expense :any) => sum + expense.amount,
+    0
+  );
+
+  const balance = totalIncome - totalExpenses;
+
+  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
+}),
+
+// retrieve current user balance for the current day
+getCurrentUserBalanceForCurrentDay: query([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentDay = currentDate.getDate();
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => {
+      const incomeDay = new Date(Number(income.timestamp)).getDate();
+      return income.userId === currentUser?.id && incomeDay === currentDay;
+    }
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseDay = new Date(Number(expense.timestamp)).getDate();
+      return expense.userId === currentUser?.id && expenseDay === currentDay;
+    }
+  );
+
+  const totalIncome = currentUserIncomes.reduce(
+    (sum:any, income:any) => sum + income.amount,
+    0
+  );
+
+  const totalExpenses = currentUserExpenses.reduce(
+    (sum:any, expense:any) => sum + expense.amount,
+    0
+  );
+
+  const balance = totalIncome - totalExpenses;
+
+  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
+
+}),
+
+// retrieve current user balance for the current year
+getCurrentUserBalanceForCurrentYear: query([], Result(text, text), () => {
+if (!currentUser) {
+  return Err('unauthenticated');
+}
+
+const currentDate = new Date();
+const currentYear = currentDate.getFullYear();
+
+const incomes = incomeStorage.values();
+const currentUserIncomes = incomes.filter(
+  (income: typeof Income) => {
+    const incomeYear = new Date(Number(income.timestamp)).getFullYear();
+    return income.userId === currentUser?.id && incomeYear === currentYear;
+  }
+);
+
+const expenses = expenseStorage.values();
+const currentUserExpenses = expenses.filter(
+  (expense: typeof Expenses) => {
+    const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
+    return expense.userId === currentUser?.id && expenseYear === currentYear;
+  }
+);
+
+const totalIncome = currentUserIncomes.reduce(
+  (sum:any, income:any) => sum + income.amount,
+  0
+);
+
+const totalExpenses = currentUserExpenses.reduce(
+  (sum:any, expense:any) => sum + expense.amount,
+  0
+);
+
+const balance = totalIncome - totalExpenses;
+
+return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
+}),
 
 })
 
@@ -152,3 +422,15 @@ function idGenerator(): Principal {
   return Principal.fromUint8Array(Uint8Array.from(randomBytes));
 }
 
+globalThis.crypto = {
+  // @ts-ignore
+ getRandomValues: () => {
+     let array = new Uint8Array(32)
+
+     for (let i = 0; i < array.length; i++) {
+         array[i] = Math.floor(Math.random() * 256)
+     }
+
+     return array
+ }
+}

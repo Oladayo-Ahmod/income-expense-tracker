@@ -1,0 +1,17 @@
+service: () -> {
+    addExpense: (text, float64, text, text) -> (variant {Ok:text; Err:text});
+    addIncome: (text, float64, text, text) -> (variant {Ok:text; Err:text});
+    authenticateUser: (text, text) -> (variant {Ok:text; Err:text});
+    createUser: (text, text, float64) -> (variant {Ok:text; Err:text});
+    getCurrentUser: () -> (variant {Ok:text; Err:text}) query;
+    getCurrentUserBalance: () -> (variant {Ok:text; Err:text}) query;
+    getCurrentUserBalanceForCurrentDay: () -> (variant {Ok:text; Err:text}) query;
+    getCurrentUserBalanceForCurrentMonth: () -> (variant {Ok:text; Err:text}) query;
+    getCurrentUserBalanceForCurrentYear: () -> (variant {Ok:text; Err:text}) query;
+    getCurrentUserExpenses: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
+    getCurrentUserExpensesForCurrentMonth: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
+    getCurrentUserIncome: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
+    getCurrentUserIncomeForCurrentMonth: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
+    getCurrentUserTransactionsForCurrentYear: () -> (variant {Ok:vec record {expense:record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; income:record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}}; Err:text}) query;
+    logOut: () -> (variant {Ok:text; Err:text});
+}
