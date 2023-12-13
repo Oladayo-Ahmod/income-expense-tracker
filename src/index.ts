@@ -304,7 +304,7 @@ getCurrentUserBalanceForCurrentMonth: query([], Result(text, text), () => {
   return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
 }),
 
-  // retrieve current user balance for the current day
+// retrieve current user balance for the current day
 getCurrentUserBalanceForCurrentDay: query([], Result(text, text), () => {
   if (!currentUser) {
     return Err('unauthenticated');
@@ -343,6 +343,46 @@ getCurrentUserBalanceForCurrentDay: query([], Result(text, text), () => {
 
   return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
 
+}),
+
+// retrieve current user balance for the current year
+getCurrentUserBalanceForCurrentYear: query([], Result(text, text), () => {
+if (!currentUser) {
+  return Err('unauthenticated');
+}
+
+const currentDate = new Date();
+const currentYear = currentDate.getFullYear();
+
+const incomes = incomeStorage.values();
+const currentUserIncomes = incomes.filter(
+  (income: typeof Income) => {
+    const incomeYear = new Date(Number(income.timestamp)).getFullYear();
+    return income.userId === currentUser?.id && incomeYear === currentYear;
+  }
+);
+
+const expenses = expenseStorage.values();
+const currentUserExpenses = expenses.filter(
+  (expense: typeof Expenses) => {
+    const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
+    return expense.userId === currentUser?.id && expenseYear === currentYear;
+  }
+);
+
+const totalIncome = currentUserIncomes.reduce(
+  (sum:any, income:any) => sum + income.amount,
+  0
+);
+
+const totalExpenses = currentUserExpenses.reduce(
+  (sum:any, expense:any) => sum + expense.amount,
+  0
+);
+
+const balance = totalIncome - totalExpenses;
+
+return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
 }),
 
 })
