@@ -18,7 +18,6 @@ const Expenses = Record({
     userId : Principal,
     amount : float64,
     description : text,
-    type : text,
     location : text, // where the expenses take place
     timestamp : nat64
 });
@@ -30,7 +29,6 @@ const Income = Record({
     userId : Principal,
     amount : float64,
     description : text,
-    type : text,
     location : text, // where the income take place
     timestamp : nat64
 });
@@ -60,9 +58,9 @@ const expenseStorage = StableBTreeMap(Principal,Expenses,3) // expense storage
 export default Canister({
 // create new user
 createUser: update(
-  [text, text, float64],
+  [text, text],
   Result(text, text),
-  (username :any, password : string, amount :number) => {
+  (username :any, password : string) => {
 
     const user = userStorage
       .values()
@@ -73,8 +71,7 @@ createUser: update(
     const newUser: typeof User = {
       id: idGenerator(),
       username,
-      password,
-      amount,
+      password
     };
     userStorage.insert(newUser.id, newUser);
     return Ok(`${newUser.username} added successfully.`);
@@ -119,9 +116,9 @@ getCurrentUser : query([], Result(text, text), () => {
 
 // add expense
 addExpense: update(
-  [text,float64,text,text,text],
+  [text,float64,text,text],
   Result(text, text),
-  (name,amount,description,type,location) => {
+  (name,amount,description,location) => {
     if (!currentUser) {
       return Err('unathenticated');
     }
@@ -132,7 +129,6 @@ addExpense: update(
       userId : currentUser.id,
       amount,
       description,
-      type,
       location,
       timestamp: ic.time(),
     };
@@ -144,9 +140,9 @@ addExpense: update(
 
 // add income
 addIncome: update(
-  [text,float64,text,text,text],
+  [text,float64,text,text],
   Result(text, text),
-  (name,amount,description,type,location) => {
+  (name,amount,description,location) => {
     if (!currentUser) {
       return Err('unathenticated');
     }
@@ -157,7 +153,6 @@ addIncome: update(
       userId : currentUser.id,
       amount,
       description,
-      type,
       location,
       timestamp: ic.time(),
     };
