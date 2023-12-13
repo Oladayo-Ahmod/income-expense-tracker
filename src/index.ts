@@ -19,7 +19,8 @@ const Expenses = Record({
     amount : float64,
     description : text,
     type : text,
-    location : text // where the expenses take place
+    location : text, // where the expenses take place
+    timestamp : nat64
 });
 
 // income
@@ -30,7 +31,8 @@ const Income = Record({
     amount : float64,
     description : text,
     type : text,
-    location : text // where the income take place
+    location : text, // where the income take place
+    timestamp : nat64
 });
 
 // tracker
@@ -114,6 +116,56 @@ getCurrentUser : query([], Result(text, text), () => {
   }
   return Ok(currentUser.username);
 }),
+
+// add expense
+addExpense: update(
+  [text,float64,text,text,text],
+  Result(text, text),
+  (name,amount,description,type,location) => {
+    if (!currentUser) {
+      return Err('unathenticated');
+    }
+
+    const newExpense: typeof Expenses = {
+      id: idGenerator(),
+      name,
+      userId : currentUser.id,
+      amount,
+      description,
+      type,
+      location,
+      timestamp: ic.time(),
+    };
+    expenseStorage.insert(newExpense.id, newExpense);
+    // userStorage.insert(currentUser.id, { ...currentUser });
+    return Ok('Expenses added successfully.');
+  }
+),
+
+// add income
+addIncome: update(
+  [text,float64,text,text,text],
+  Result(text, text),
+  (name,amount,description,type,location) => {
+    if (!currentUser) {
+      return Err('unathenticated');
+    }
+
+    const newIncome: typeof Income = {
+      id: idGenerator(),
+      name,
+      userId : currentUser.id,
+      amount,
+      description,
+      type,
+      location,
+      timestamp: ic.time(),
+    };
+    incomeStorage.insert(newIncome.id, newIncome);
+    // userStorage.insert(currentUser.id, { ...currentUser });
+    return Ok('Income added successfully.');
+  }
+),
 
 
 })
