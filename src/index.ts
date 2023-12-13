@@ -220,17 +220,8 @@ getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
   );
 
   const balance = totalIncome - totalExpenses;
-    if (balance > 0) {
-      return Ok(`${balance} surplus , your incomes are more than your expenses`)
-    }
-    else if (balance == 0) {
-      return Ok(`${balance} balanced, your expenses equal your incomes`)
-    }
-    else if (balance < 0) {
-      return Ok(`${balance} deficit, your expenses are more than your incomes `)
-    }
 
-  return Ok(balance >= 0 ? 'Surplus' : 'Deficit');
+  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
 }),
 
 // retrieve current user expenses for the current month
@@ -253,6 +244,64 @@ getCurrentUserExpensesForCurrentMonth: query([], Result(Vec(Expenses), text), ()
   return Ok(currentUserExpenses);
 }),
 
+// retrieve current user income for the current month
+getCurrentUserIncomeForCurrentMonth: query([], Result(Vec(Income), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const incomes = incomeStorage.values();
+  const currentUserIncome = incomes.filter(
+    (income: typeof Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser?.id && incomeMonth === currentMonth;
+    }
+  );
+
+  return Ok(currentUserIncome);
+}),
+
+getCurrentUserBalanceForCurrentMonth: query([], Result(text, text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser?.id && incomeMonth === currentMonth;
+    }
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
+      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
+    }
+  );
+
+  const totalIncome = currentUserIncomes.reduce(
+    (sum :any, income :any) => sum + income.amount,
+    0
+  );
+
+  const totalExpenses = currentUserExpenses.reduce(
+    (sum :any, expense :any) => sum + expense.amount,
+    0
+  );
+
+  const balance = totalIncome - totalExpenses;
+
+  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
+}),
 
 
 })
