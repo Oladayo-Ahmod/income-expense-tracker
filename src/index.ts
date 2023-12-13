@@ -194,7 +194,7 @@ getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
 }),
 
  // retrieve current user balance
- getCurrentUserBalance: query([], Result(float64, text), () => {
+ getCurrentUserBalance: query([], Result(text, text), () => {
   if (!currentUser) {
     return Err('unauthenticated');
   }
@@ -231,6 +231,26 @@ getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
     }
 
   return Ok(balance >= 0 ? 'Surplus' : 'Deficit');
+}),
+
+// retrieve current user expenses for the current month
+getCurrentUserExpensesForCurrentMonth: query([], Result(Vec(Expenses), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
+      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
+    }
+  );
+
+  return Ok(currentUserExpenses);
 }),
 
 
