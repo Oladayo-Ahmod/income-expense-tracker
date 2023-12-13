@@ -264,6 +264,37 @@ getCurrentUserIncomeForCurrentMonth: query([], Result(Vec(Income), text), () => 
   return Ok(currentUserIncome);
 }),
 
+// retrieve current user income and expenses for the year
+getCurrentUserTransactionsForCurrentYear: query([], Result(Vec(Record({income: Income, expense: Expenses})), text), () => {
+  if (!currentUser) {
+    return Err('unauthenticated');
+  }
+
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+
+  const incomes = incomeStorage.values();
+  const currentUserIncomes = incomes.filter(
+    (income: typeof Income) => {
+      const incomeYear = new Date(Number(income.timestamp)).getFullYear();
+      return income.userId === currentUser?.id && incomeYear === currentYear;
+    }
+  );
+
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter(
+    (expense: typeof Expenses) => {
+      const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
+      return expense.userId === currentUser?.id && expenseYear === currentYear;
+    }
+  );
+
+  const transactions = currentUserIncomes.map(income => ({ income })) 
+    .concat(currentUserExpenses.map(expense => ({ expense })));
+  return Ok(transactions);
+}),
+
+
 // retrieve current user balance for current month
 getCurrentUserBalanceForCurrentMonth: query([], Result(text, text), () => {
   if (!currentUser) {
@@ -396,3 +427,15 @@ function idGenerator(): Principal {
   return Principal.fromUint8Array(Uint8Array.from(randomBytes));
 }
 
+globalThis.crypto = {
+  // @ts-ignore
+ getRandomValues: () => {
+     let array = new Uint8Array(32)
+
+     for (let i = 0; i < array.length; i++) {
+         array[i] = Math.floor(Math.random() * 256)
+     }
+
+     return array
+ }
+}
