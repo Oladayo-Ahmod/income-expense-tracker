@@ -1,17 +1,52 @@
-service: () -> {
-    addExpense: (text, float64, text, text) -> (variant {Ok:text; Err:text});
-    addIncome: (text, float64, text, text) -> (variant {Ok:text; Err:text});
-    authenticateUser: (text, text) -> (variant {Ok:text; Err:text});
-    createUser: (text, text, float64) -> (variant {Ok:text; Err:text});
-    getCurrentUser: () -> (variant {Ok:text; Err:text}) query;
-    getCurrentUserBalance: () -> (variant {Ok:text; Err:text}) query;
-    getCurrentUserBalanceForCurrentDay: () -> (variant {Ok:text; Err:text}) query;
-    getCurrentUserBalanceForCurrentMonth: () -> (variant {Ok:text; Err:text}) query;
-    getCurrentUserBalanceForCurrentYear: () -> (variant {Ok:text; Err:text}) query;
-    getCurrentUserExpenses: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
-    getCurrentUserExpensesForCurrentMonth: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
-    getCurrentUserIncome: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
-    getCurrentUserIncomeForCurrentMonth: () -> (variant {Ok:vec record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; Err:text}) query;
-    getCurrentUserTransactionsForCurrentYear: () -> (variant {Ok:vec record {expense:record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}; income:record {id:principal; userId:principal; name:text; description:text; timestamp:nat64; amount:float64; location:text}}; Err:text}) query;
-    logOut: () -> (variant {Ok:text; Err:text});
+type ExpensePayload = record {
+  name : text;
+  description : text;
+  amount : float64;
+  location : text;
+};
+type Expenses = record {
+  id : text;
+  userId : text;
+  name : text;
+  description : text;
+  timestamp : nat64;
+  amount : float64;
+  location : text;
+};
+type Income = record {
+  id : text;
+  userId : text;
+  name : text;
+  description : text;
+  timestamp : nat64;
+  amount : float64;
+  location : text;
+};
+type IncomePayload = record {
+  name : text;
+  description : text;
+  amount : float64;
+  location : text;
+};
+type UserTransaction = record { expense : Income; income : Income };
+type _AzleResult = variant { Ok : text; Err : text };
+type _AzleResult_1 = variant { Ok : vec Expenses; Err : text };
+type _AzleResult_2 = variant { Ok : vec Income; Err : text };
+type _AzleResult_3 = variant { Ok : vec UserTransaction; Err : text };
+service : () -> {
+  addExpense : (ExpensePayload) -> (_AzleResult);
+  addIncome : (IncomePayload) -> (_AzleResult);
+  authenticateUser : (text, text) -> (_AzleResult);
+  createUser : (text, text) -> (_AzleResult);
+  getCurrentUser : () -> (_AzleResult) query;
+  getCurrentUserBalance : () -> (_AzleResult) query;
+  getCurrentUserBalanceForCurrentDay : () -> (_AzleResult) query;
+  getCurrentUserBalanceForCurrentMonth : () -> (_AzleResult) query;
+  getCurrentUserBalanceForCurrentYear : () -> (_AzleResult) query;
+  getCurrentUserExpenses : () -> (_AzleResult_1) query;
+  getCurrentUserExpensesForCurrentMonth : () -> (_AzleResult_1) query;
+  getCurrentUserIncome : () -> (_AzleResult_2) query;
+  getCurrentUserIncomeForCurrentMonth : () -> (_AzleResult_2) query;
+  getCurrentUserTransactionsForCurrentYear : () -> (_AzleResult_3) query;
+  logOut : () -> (_AzleResult);
 }

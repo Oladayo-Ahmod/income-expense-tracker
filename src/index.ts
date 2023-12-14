@@ -1,436 +1,477 @@
-import { query,int, update,text,Principal,float64, Record, 
-    StableBTreeMap, Vec, Result, nat64, ic, Opt, Err, Ok, Canister }
- from 'azle';
+import {
+  $query,
+  int,
+  $update,
+  text,
+  Principal,
+  float64,
+  Record,
+  StableBTreeMap,
+  Vec,
+  Result,
+  nat64,
+  ic,
+  Opt,
+} from 'azle';
+
 import { v4 as uuidv4 } from 'uuid';
 
+// Define User type
+type User = Record<{
+  id: string;
+  username: text;
+  password: text;
+}>;
 
-// user
-const User = Record({
-    id: Principal,
-    username: text,
-    password: text,
-});
+// Define Expenses type
+type Expenses = Record<{
+  id: string;
+  name: text;
+  userId: string;
+  amount: float64;
+  description: text;
+  location: text;
+  timestamp: nat64;
+}>;
 
-// Expenses
-const Expenses = Record({
-    id : Principal,
-    name : text,
-    userId : Principal,
-    amount : float64,
-    description : text,
-    location : text, // where the expenses take place
-    timestamp : nat64
-});
+type ExpensePayload = Record<{
+  name: text;
+  amount: float64;
+  description: text;
+  location: text;
+}>;
 
-// income
-const Income = Record({
-    id : Principal,
-    name : text,
-    userId : Principal,
-    amount : float64,
-    description : text,
-    location : text, // where the income take place
-    timestamp : nat64
-});
+// Define Income type
+type Income = Record<{
+  id: string;
+  name: text;
+  userId: string;
+  amount: float64;
+  description: text;
+  location: text;
+  timestamp: nat64;
+}>;
 
-// tracker
-const Tracker = Record({
-    totalExpenses : float64,
-    totalIncome : float64,
-    balance : float64,
-    users : Vec(User)
-});
+// Define Income type
+type IncomePayload = Record<{
+  name: text;
+  amount: float64;
+  description: text;
+  location: text;
+}>;
 
-// tracker storage
-const trackerStorage : typeof Tracker = {
-    totalExpenses : 0,
-    totalIncome : 0,
-    balance : 0,
-    users : []
+// Define Tracker type
+type Tracker = Record<{
+  totalExpenses: float64;
+  totalIncome: float64;
+  balance: float64;
+  users: Vec<User>;
+}>;
+
+// Define Tracker storage type
+type TrackerStorage = Record<{
+  totalExpenses: float64;
+  totalIncome: float64;
+  balance: float64;
+  users: Vec<User>;
+}>;
+
+let currentUser: User | undefined;
+
+// Create StableBTreeMap for user storage
+const userStorage = new StableBTreeMap<string, User>(0, 44, 1024);
+const incomeStorage = new StableBTreeMap<string, Income>(1, 44, 1024); // income storage
+const expenseStorage = new StableBTreeMap<string, Expenses>(2, 44, 1024); // expense storage
+
+$update
+export function createUser(username: text, password: text): Result<string, string> {
+  try {
+    if (!username || !password) {
+      return Result.Err('Invalid username or password.');
+    }
+
+    // Find if the user already exists
+    const existingUser = userStorage
+      .values()
+      .find((c: User) => c.username === username);
+
+    if (existingUser) {
+      return Result.Err('User already exists.');
+    }
+
+    // Create a new user record
+    const newUser: User = {
+      id: uuidv4(),
+      username,
+      password,
+    };
+
+    userStorage.insert(newUser.id, newUser);
+
+    return Result.Ok<string, string>(`${newUser.username} added successfully.`);
+  } catch (error) {
+    return Result.Err(`Failed to create user: ${error}`);
+  }
 }
 
-let currentUser : typeof User | undefined
-
-const userStorage = StableBTreeMap(Principal,User,1);
-const incomeStorage = StableBTreeMap(Principal,Income,2) //income storage
-const expenseStorage = StableBTreeMap(Principal,Expenses,3) // expense storage
-
-export default Canister({
-// create new user
-createUser: update(
-  [text, text],
-  Result(text, text),
-  (username :any, password : string) => {
-
-    const user = userStorage
-      .values()
-      .filter((c: typeof User) => c.username === username)[0];
-    if (user) {
-      return Err('user already exists.');
+$update
+export function authenticateUser(username: text, password: text): Result<string, string> {
+  try {
+    if (!username || !password) {
+      return Result.Err('Invalid username or password.');
     }
-    const newUser: typeof User = {
-      id: idGenerator(),
-      username,
-      password
-    };
-    userStorage.insert(newUser.id, newUser);
-    return Ok(`${newUser.username} added successfully.`);
-  }
-),
 
-// authenticate user
-authenticateUser: update(
-  [text, text],
-  Result(text, text),
-  (username, password) => {
-    const user : any = userStorage
-      .values()
-      .filter((c: typeof User) => c.username === username)[0];
+    // Find the user by username
+    const user = userStorage.values().find((c: User) => c.username === username);
+
     if (!user) {
-      return Err('user does not exist.');
+      return Result.Err('User does not exist.');
     }
+
+    // Check if the provided password matches the user's password
     if (user.password !== password) {
-      return Err('incorrect password');
+      return Result.Err('Incorrect password');
     }
+
+    // Set the current user
     currentUser = user;
-    return Ok('Logged in');
-  }
-),
 
-// logout user
-logOut: update([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('no logged in user');
+    return Result.Ok('Logged in');
+  } catch (error) {
+    return Result.Err(`Failed to authenticate user: ${error}`);
   }
-  currentUser = undefined;
-  return Ok('Logged out successfully.');
-}),
+}
 
-// get current user
-getCurrentUser : query([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('no logged in user.');
-  }
-  return Ok(currentUser.username);
-}),
-
-// add expense
-addExpense: update(
-  [text,float64,text,text],
-  Result(text, text),
-  (name,amount,description,location) => {
+$update
+export function logOut(): Result<string, string> {
+  try {
     if (!currentUser) {
-      return Err('unathenticated');
+      return Result.Err('No logged in user');
     }
 
-    const newExpense: typeof Expenses = {
-      id: idGenerator(),
-      name,
-      userId : currentUser.id,
-      amount,
-      description,
-      location,
+    currentUser = undefined;
+
+    return Result.Ok('Logged out successfully.');
+  } catch (error) {
+    return Result.Err(`Failed to log out: ${error}`);
+  }
+}
+
+$query
+export function getCurrentUser(): Result<string, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('No logged in user');
+    }
+
+    return Result.Ok(currentUser.username);
+  } catch (error) {
+    return Result.Err(`Failed to get current user: ${error}`);
+  }
+}
+
+$update
+export function addExpense(payload: ExpensePayload): Result<string, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    // Payload validation
+    const { name, amount, description, location } = payload;
+    if (!name || amount < 0 || !description || !location) {
+      return Result.Err('Invalid expense payload');
+    }
+
+    const newExpense: Expenses = {
+      id: uuidv4(),
+      userId: currentUser.id,
       timestamp: ic.time(),
+      name: payload.name,
+      amount: payload.amount,
+      description: payload.description,
+      location: payload.location,
     };
+
     expenseStorage.insert(newExpense.id, newExpense);
-    // userStorage.insert(currentUser.id, { ...currentUser });
-    return Ok('Expenses added successfully.');
-  }
-),
 
-// add income
-addIncome: update(
-  [text,float64,text,text],
-  Result(text, text),
-  (name,amount,description,location) => {
+    return Result.Ok('Expense added successfully.');
+  } catch (error) {
+    return Result.Err(`Failed to add expense: ${error}`);
+  }
+}
+
+$update
+export function addIncome(payload: IncomePayload): Result<string, string> {
+  try {
     if (!currentUser) {
-      return Err('unathenticated');
+      return Result.Err('Unauthenticated');
     }
 
-    const newIncome: typeof Income = {
-      id: idGenerator(),
-      name,
-      userId : currentUser.id,
-      amount,
-      description,
-      location,
+    // Payload validation
+    const { name, amount, description, location } = payload;
+    if (!name || amount < 0 || !description || !location) {
+      return Result.Err('Invalid income payload');
+    }
+
+    const newIncome: Income = {
+      id: uuidv4(),
+      userId: currentUser.id,
       timestamp: ic.time(),
+      name: payload.name,
+      amount: payload.amount,
+      description: payload.description,
+      location: payload.location,
     };
+
     incomeStorage.insert(newIncome.id, newIncome);
-    // userStorage.insert(currentUser.id, { ...currentUser });
-    return Ok('Income added successfully.');
+
+    return Result.Ok('Income added successfully.');
+  } catch (error) {
+    return Result.Err(`Failed to add income: ${error}`);
   }
-),
+}
 
-// retrieve current user incomes
-getCurrentUserIncome: query([], Result(Vec(Income), text), () => {
-  if (!currentUser) {
-    return Err('unathenticated');
+$query
+export function getCurrentUserIncome(): Result<Vec<Income>, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const incomes = incomeStorage.values();
+    const currentUserIncomes = incomes.filter((income: Income) => income.userId === currentUser!.id);
+
+    return Result.Ok(currentUserIncomes);
+  } catch (error) {
+    return Result.Err(`Failed to get current user income: ${error}`);
   }
-  const incomes = incomeStorage.values();
-  const currentUserIncomes = incomes.filter(
-    (income: typeof Income) =>
-      income.userId === currentUser?.id
-  );
-  return Ok(currentUserIncomes);
-}),
+}
 
-// retrieve current user expenses
-getCurrentUserExpenses: query([], Result(Vec(Expenses), text), () => {
-  if (!currentUser) {
-    return Err('unathenticated');
+$query
+export function getCurrentUserExpenses(): Result<Vec<Expenses>, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense: Expenses) => expense.userId === currentUser!.id);
+
+    return Result.Ok(currentUserExpenses);
+  } catch (error) {
+    return Result.Err(`Failed to get current user expenses: ${error}`);
   }
-  const expenses = expenseStorage.values();
-  const currentUserexpenses = expenses.filter(
-    (expense: typeof Expenses) =>
-      expense.userId === currentUser?.id
-  );
-  return Ok(currentUserexpenses);
-}),
+}
 
- // retrieve current user balance
- getCurrentUserBalance: query([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('unauthenticated');
+$query
+export function getCurrentUserBalance(): Result<string, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const incomes = incomeStorage.values();
+    const currentUserIncomes = incomes.filter((income: Income) => income.userId === currentUser!.id);
+
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense: Expenses) => expense.userId === currentUser!.id);
+
+    const totalIncome = currentUserIncomes.reduce((sum: number, income: Income) => sum + income.amount, 0);
+    const totalExpenses = currentUserExpenses.reduce((sum: number, expense: Expenses) => sum + expense.amount, 0);
+
+    const balance = totalIncome - totalExpenses;
+
+    return Result.Ok(balance >= 0 ? `${balance} Surplus` : `${balance} Deficit`);
+  } catch (error) {
+    return Result.Err(`Failed to get current user balance: ${error}`);
   }
+}
 
-  const incomes = incomeStorage.values();
-  const currentUserIncomes = incomes.filter(
-    (income: typeof Income) => income.userId === currentUser?.id
-  );
+$query
+export function getCurrentUserExpensesForCurrentMonth(): Result<Vec<Expenses>, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
 
-  const expenses = expenseStorage.values();
-  const currentUserExpenses = expenses.filter(
-    (expense: typeof Expenses) => expense.userId === currentUser?.id
-  );
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
 
-  const totalIncome = currentUserIncomes.reduce(
-    (sum : any, income : any) => sum + income.amount,
-    0
-  );
-
-  const totalExpenses = currentUserExpenses.reduce(
-    (sum :any, expense :any) => sum + expense.amount,
-    0
-  );
-
-  const balance = totalIncome - totalExpenses;
-
-  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
-}),
-
-// retrieve current user expenses for the current month
-getCurrentUserExpensesForCurrentMonth: query([], Result(Vec(Expenses), text), () => {
-  if (!currentUser) {
-    return Err('unauthenticated');
-  }
-
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
-
-  const expenses = expenseStorage.values();
-  const currentUserExpenses = expenses.filter(
-    (expense: typeof Expenses) => {
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense: Expenses) => {
       const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
-      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
-    }
-  );
+      return expense.userId === currentUser!.id && expenseMonth === currentMonth;
+    });
 
-  return Ok(currentUserExpenses);
-}),
-
-// retrieve current user income for the current month
-getCurrentUserIncomeForCurrentMonth: query([], Result(Vec(Income), text), () => {
-  if (!currentUser) {
-    return Err('unauthenticated');
+    return Result.Ok(currentUserExpenses);
+  } catch (error) {
+    return Result.Err(`Failed to get current user expenses for the current month: ${error}`);
   }
+}
 
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
-
-  const incomes = incomeStorage.values();
-  const currentUserIncome = incomes.filter(
-    (income: typeof Income) => {
-      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
-      return income.userId === currentUser?.id && incomeMonth === currentMonth;
+$query
+export function getCurrentUserIncomeForCurrentMonth(): Result<Vec<Income>, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
     }
-  );
 
-  return Ok(currentUserIncome);
-}),
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
 
-// retrieve current user income and expenses for the year
-getCurrentUserTransactionsForCurrentYear: query([], Result(Vec(Record({income: Income, expense: Expenses})), text), () => {
+    const incomes = incomeStorage.values();
+    const currentUserIncome = incomes.filter((income: Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser!.id && incomeMonth === currentMonth;
+    });
+
+    return Result.Ok(currentUserIncome);
+  } catch (error) {
+    return Result.Err(`Failed to get current user income for the current month: ${error}`);
+  }
+}
+
+type UserTransaction = Record<{ income?: Income; expense?: Expenses }>;
+
+$query
+export function getCurrentUserTransactionsForCurrentYear(): Result<Vec<UserTransaction>, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+
+    const incomes = incomeStorage.values();
+    const currentUserIncomes = incomes.filter((income: Income) => {
+      const incomeYear = new Date(Number(income.timestamp)).getFullYear();
+      return income.userId === currentUser!.id && incomeYear === currentYear;
+    });
+
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense: Expenses) => {
+      const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
+      return expense.userId === currentUser!.id && expenseYear === currentYear;
+    });
+
+    const incomeTransactions: UserTransaction[] = currentUserIncomes.map((income) => ({ income }));
+    const expenseTransactions: UserTransaction[] = currentUserExpenses.map((expense) => ({ expense }));
+
+    const transactions: UserTransaction[] = [...incomeTransactions, ...expenseTransactions];
+
+    return Result.Ok(transactions);
+  } catch (error) {
+    return Result.Err(`Failed to get current user transactions for the current year: ${error}`);
+  }
+}
+
+$query
+export function getCurrentUserBalanceForCurrentMonth(): Result<string, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
+
+    const incomes = incomeStorage.values();
+    const currentUserIncomes = incomes.filter((income: Income) => {
+      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
+      return income.userId === currentUser!.id && incomeMonth === currentMonth;
+    });
+
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense: Expenses) => {
+      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
+      return expense.userId === currentUser!.id && expenseMonth === currentMonth;
+    });
+
+    const totalIncome = currentUserIncomes.reduce((sum: number, income: Income) => sum + income.amount, 0);
+    const totalExpenses = currentUserExpenses.reduce((sum: number, expense: Expenses) => sum + expense.amount, 0);
+
+    const balance = totalIncome - totalExpenses;
+
+    return Result.Ok(balance >= 0 ? `${balance} Surplus` : `${balance} Deficit`);
+  } catch (error) {
+    return Result.Err(`Failed to get current user balance for the current month: ${error}`);
+  }
+}
+
+$query
+export function getCurrentUserBalanceForCurrentDay(): Result<string, string> {
+  try {
+    if (!currentUser) {
+      return Result.Err('Unauthenticated');
+    }
+
+    const currentDate = new Date();
+    const currentDay = currentDate.getDate();
+
+    const incomes = incomeStorage.values();
+    const currentUserIncomes = incomes.filter((income) => {
+      const incomeDay = new Date(Number(income.timestamp)).getDate();
+      return income.userId === currentUser!.id && incomeDay === currentDay;
+    });
+
+    const expenses = expenseStorage.values();
+    const currentUserExpenses = expenses.filter((expense) => {
+      const expenseDay = new Date(Number(expense.timestamp)).getDate();
+      return expense.userId === currentUser!.id && expenseDay === currentDay;
+    });
+
+    const totalIncome = currentUserIncomes.reduce((sum: number, income) => sum + income.amount, 0);
+    const totalExpenses = currentUserExpenses.reduce((sum: number, expense) => sum + expense.amount, 0);
+
+    const balance = totalIncome - totalExpenses;
+
+    return Result.Ok(balance >= 0 ? `${balance} Surplus` : `${balance} Deficit`);
+  } catch (error) {
+    return Result.Err(`Failed to get current user balance for the current day: ${error}`);
+  }
+}
+
+$query
+export function getCurrentUserBalanceForCurrentYear(): Result<string, string> {
   if (!currentUser) {
-    return Err('unauthenticated');
+    return Result.Err('Unauthenticated');
   }
 
   const currentDate = new Date();
   const currentYear = currentDate.getFullYear();
 
   const incomes = incomeStorage.values();
-  const currentUserIncomes = incomes.filter(
-    (income: typeof Income) => {
-      const incomeYear = new Date(Number(income.timestamp)).getFullYear();
-      return income.userId === currentUser?.id && incomeYear === currentYear;
-    }
-  );
-
-  const expenses = expenseStorage.values();
-  const currentUserExpenses = expenses.filter(
-    (expense: typeof Expenses) => {
-      const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
-      return expense.userId === currentUser?.id && expenseYear === currentYear;
-    }
-  );
-
-  const transactions = currentUserIncomes.map(income => ({ income })) 
-    .concat(currentUserExpenses.map(expense => ({ expense })));
-  return Ok(transactions);
-}),
-
-
-// retrieve current user balance for current month
-getCurrentUserBalanceForCurrentMonth: query([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('unauthenticated');
-  }
-
-  const currentDate = new Date();
-  const currentMonth = currentDate.getMonth() + 1; // Months are 0-indexed, so we add 1.
-
-  const incomes = incomeStorage.values();
-  const currentUserIncomes = incomes.filter(
-    (income: typeof Income) => {
-      const incomeMonth = new Date(Number(income.timestamp)).getMonth() + 1;
-      return income.userId === currentUser?.id && incomeMonth === currentMonth;
-    }
-  );
-
-  const expenses = expenseStorage.values();
-  const currentUserExpenses = expenses.filter(
-    (expense: typeof Expenses) => {
-      const expenseMonth = new Date(Number(expense.timestamp)).getMonth() + 1;
-      return expense.userId === currentUser?.id && expenseMonth === currentMonth;
-    }
-  );
-
-  const totalIncome = currentUserIncomes.reduce(
-    (sum :any, income :any) => sum + income.amount,
-    0
-  );
-
-  const totalExpenses = currentUserExpenses.reduce(
-    (sum :any, expense :any) => sum + expense.amount,
-    0
-  );
-
-  const balance = totalIncome - totalExpenses;
-
-  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
-}),
-
-// retrieve current user balance for the current day
-getCurrentUserBalanceForCurrentDay: query([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('unauthenticated');
-  }
-
-  const currentDate = new Date();
-  const currentDay = currentDate.getDate();
-
-  const incomes = incomeStorage.values();
-  const currentUserIncomes = incomes.filter(
-    (income: typeof Income) => {
-      const incomeDay = new Date(Number(income.timestamp)).getDate();
-      return income.userId === currentUser?.id && incomeDay === currentDay;
-    }
-  );
-
-  const expenses = expenseStorage.values();
-  const currentUserExpenses = expenses.filter(
-    (expense: typeof Expenses) => {
-      const expenseDay = new Date(Number(expense.timestamp)).getDate();
-      return expense.userId === currentUser?.id && expenseDay === currentDay;
-    }
-  );
-
-  const totalIncome = currentUserIncomes.reduce(
-    (sum:any, income:any) => sum + income.amount,
-    0
-  );
-
-  const totalExpenses = currentUserExpenses.reduce(
-    (sum:any, expense:any) => sum + expense.amount,
-    0
-  );
-
-  const balance = totalIncome - totalExpenses;
-
-  return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
-
-}),
-
-// retrieve current user balance for the current year
-getCurrentUserBalanceForCurrentYear: query([], Result(text, text), () => {
-if (!currentUser) {
-  return Err('unauthenticated');
-}
-
-const currentDate = new Date();
-const currentYear = currentDate.getFullYear();
-
-const incomes = incomeStorage.values();
-const currentUserIncomes = incomes.filter(
-  (income: typeof Income) => {
+  const currentUserIncomes = incomes.filter((income) => {
     const incomeYear = new Date(Number(income.timestamp)).getFullYear();
-    return income.userId === currentUser?.id && incomeYear === currentYear;
-  }
-);
+    return income.userId === currentUser!.id && incomeYear === currentYear;
+  });
 
-const expenses = expenseStorage.values();
-const currentUserExpenses = expenses.filter(
-  (expense: typeof Expenses) => {
+  const expenses = expenseStorage.values();
+  const currentUserExpenses = expenses.filter((expense) => {
     const expenseYear = new Date(Number(expense.timestamp)).getFullYear();
-    return expense.userId === currentUser?.id && expenseYear === currentYear;
-  }
-);
+    return expense.userId === currentUser!.id && expenseYear === currentYear;
+  });
 
-const totalIncome = currentUserIncomes.reduce(
-  (sum:any, income:any) => sum + income.amount,
-  0
-);
+  const totalIncome = currentUserIncomes.reduce((sum: number, income) => sum + income.amount, 0);
+  const totalExpenses = currentUserExpenses.reduce((sum: number, expense) => sum + expense.amount, 0);
 
-const totalExpenses = currentUserExpenses.reduce(
-  (sum:any, expense:any) => sum + expense.amount,
-  0
-);
+  const balance = totalIncome - totalExpenses;
 
-const balance = totalIncome - totalExpenses;
-
-return Ok(balance >= 0 ? `${balance} 'Surplus'` : `${balance}'Deficit'`);
-}),
-
-})
-
-// ID generator
-function idGenerator(): Principal {
-  const randomBytes = new Array(29)
-    .fill(0)
-    .map((_) => Math.floor(Math.random() * 256));
-
-  return Principal.fromUint8Array(Uint8Array.from(randomBytes));
+  return Result.Ok(balance >= 0 ? `${balance} Surplus` : `${balance} Deficit`);
 }
+
 
 globalThis.crypto = {
   // @ts-ignore
- getRandomValues: () => {
-     let array = new Uint8Array(32)
+  getRandomValues: () => {
+    let array = new Uint8Array(32)
 
-     for (let i = 0; i < array.length; i++) {
-         array[i] = Math.floor(Math.random() * 256)
-     }
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256)
+    }
 
-     return array
- }
+    return array
+  }
 }
