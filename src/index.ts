@@ -95,17 +95,21 @@ authenticateUser: update(
     currentUser = user;
     return Ok('Logged in');
   }
-),
-
+)
 // logout user
 logOut: update([], Result(text, text), () => {
-  if (!currentUser) {
-    return Err('no logged in user');
-  }
-  currentUser = undefined;
-  return Ok('Logged out successfully.');
-}),
+    if (!currentUser) {
+        return Err('no logged in user');
+    }
 
+    if (!isValidUserSession(currentUser)) {
+        return Err('invalid user session');
+    }
+
+    currentUser = undefined;
+    return Ok('Logged out successfully.');
+}),
+    
 // get current user
 getCurrentUser : query([], Result(text, text), () => {
   if (!currentUser) {
@@ -114,29 +118,44 @@ getCurrentUser : query([], Result(text, text), () => {
   return Ok(currentUser.username);
 }),
 
+
 // add expense
 addExpense: update(
-  [text,float64,text,text],
-  Result(text, text),
-  (name,amount,description,location) => {
-    if (!currentUser) {
-      return Err('unathenticated');
-    }
+    [text, float64, text, text],
+    Result(text, text),
+    (name, amount, description, location) => {
+        if (!currentUser) {
+            return Err('unauthenticated');
+        }
 
-    const newExpense: typeof Expenses = {
-      id: idGenerator(),
-      name,
-      userId : currentUser.id,
-      amount,
-      description,
-      location,
-      timestamp: ic.time(),
-    };
-    expenseStorage.insert(newExpense.id, newExpense);
-    // userStorage.insert(currentUser.id, { ...currentUser });
-    return Ok('Expenses added successfully.');
-  }
+        // Better resource management
+        try {
+            const newExpense: typeof Expenses = {
+                id: idGenerator(),
+                name,
+                userId: currentUser.id,
+                amount,
+                description,
+                location,
+                timestamp: ic.time(),
+            };
+            expenseStorage.insert(newExpense.id, newExpense);
+
+            // Optionally, log successful operation
+            // logOperationSuccess('addExpense', currentUser.id);
+
+            return Ok('Expense added successfully.');
+        } catch (error) {
+            // Log the error for further analysis
+            // logError('addExpense', currentUser.id, error);
+
+            return Err('An error occurred while adding the expense.');
+        }
+    }
 ),
+
+// ...
+
 
 // add income
 addIncome: update(
@@ -421,6 +440,8 @@ function idGenerator(): Principal {
 
   return Principal.fromUint8Array(Uint8Array.from(randomBytes));
 }
+
+
 
 globalThis.crypto = {
   // @ts-ignore
