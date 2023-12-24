@@ -1,7 +1,3 @@
-Certainly! Here's a simple README file for your IC code:
-
----
-
 # Income Expense Tracker Canister
 
 ## Overview
